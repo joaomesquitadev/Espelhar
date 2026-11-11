@@ -83,7 +83,3 @@ public/          Favicon e ícones
 index.html       Página de entrada
 vite.config.js   Configuração do Vite (CSP e URL do site)
 ```
-
-## Licença
-
-Projeto privado. Todos os direitos reservados.
