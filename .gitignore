@@ -21,8 +21,9 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Claude Code (configuração local)
-.claude/settings.local.json
+# Ferramentas de IA (configuração local)
+.claude/
+.impeccable/
 
 # Deploy
 .netlify/
