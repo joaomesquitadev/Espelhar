@@ -264,9 +264,14 @@ export function useViewer() {
         fail(message)
       }
       const TIMEOUT_MESSAGE =
-        'A conexão demorou demais. Sua rede (ou a do anfitrião) bloqueia conexões diretas. Tente outro Wi-Fi ou dados móveis.'
+        'A conexão demorou demais. Sua rede, a do anfitrião ou uma VPN bloqueia a conexão. Tente desligar a VPN, usar outro Wi-Fi ou dados móveis.'
       conn.on('error', () => giveUp(TIMEOUT_MESSAGE))
       conn.on('close', () => giveUp(TIMEOUT_MESSAGE))
+      // A VPN that drops direct UDP makes ICE fail well before the timeout: move on to the relay at once.
+      const pc = conn.peerConnection
+      pc?.addEventListener('iceconnectionstatechange', () => {
+        if (pc.iceConnectionState === 'failed') giveUp(TIMEOUT_MESSAGE)
+      })
 
       clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => giveUp(TIMEOUT_MESSAGE), relayRef.current ? CONNECT_TIMEOUT_MS : DIRECT_TIMEOUT_MS)
