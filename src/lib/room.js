@@ -137,24 +137,32 @@ export function randomCode() {
   return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join('')
 }
 
-// Direct connections fail on strict networks and need a TURN relay. The free public ones this app used to list
-// (peerjs.com, openrelay.metered.ca) no longer work, so set VITE_TURN_URLS (comma separated), VITE_TURN_USER
-// and VITE_TURN_PASS to use your own relay.
-const ownTurn = import.meta.env.VITE_TURN_URLS
-const ICE_SERVERS = [
-  {
-    urls: [
-      'stun:stun.l.google.com:19302',
-      'stun:stun1.l.google.com:19302',
-      'stun:stun2.l.google.com:19302',
-      'stun:global.stun.twilio.com:3478',
-      'stun:stun.cloudflare.com:3478',
-    ],
-  },
-  ...(ownTurn
-    ? [{ urls: ownTurn.split(',').map((u) => u.trim()), username: import.meta.env.VITE_TURN_USER, credential: import.meta.env.VITE_TURN_PASS }]
-    : []),
+// Direct connections fail on strict networks and VPNs (Cloudflare WARP / 1.1.1.1, NordVPN, corporate VPNs...), which
+// rewrite or block UDP. Those need a TURN relay, ideally reachable over TCP/TLS on port 443 so it looks like HTTPS.
+// The free public relays this app used to list no longer work, so set VITE_TURN_URLS (comma separated),
+// VITE_TURN_USER and VITE_TURN_PASS to use your own.
+const STUN_URLS = [
+  'stun:stun.cloudflare.com:3478',
+  'stun:stun.l.google.com:19302',
+  'stun:stun1.l.google.com:19302',
+  'stun:stun2.l.google.com:19302',
+  'stun:global.stun.twilio.com:3478',
 ]
+
+// Most VPN-friendly first: TLS on 443, then TCP, then plain UDP.
+const turnRank = (url) => (url.startsWith('turns:') ? 0 : url.includes('transport=tcp') ? 1 : 2)
+
+function turnServers() {
+  const urls = (import.meta.env.VITE_TURN_URLS ?? '')
+    .split(',')
+    .map((u) => u.trim())
+    .filter(Boolean)
+    .sort((x, y) => turnRank(x) - turnRank(y))
+  if (!urls.length) return []
+  return [{ urls, username: import.meta.env.VITE_TURN_USER, credential: import.meta.env.VITE_TURN_PASS }]
+}
+
+const ICE_SERVERS = [{ urls: STUN_URLS }, ...turnServers()]
 const PEER_OPTIONS = { config: { iceServers: ICE_SERVERS, iceCandidatePoolSize: 4 } }
 // `relay` sends every byte through the TURN server: slower, but it works when a direct path (VPN, strict NAT) does not.
 const RELAY_OPTIONS = { config: { iceServers: ICE_SERVERS, iceTransportPolicy: 'relay' } }

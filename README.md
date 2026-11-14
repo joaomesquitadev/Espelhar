@@ -46,7 +46,7 @@ O app não define atalhos de teclado próprios.
 
 ## Limitações
 
-- Atrás de NAT restritivo a conexão pode falhar, a menos que um servidor TURN seja configurado (`VITE_TURN_*`). Se a conexão direta não se estabelece, o espectador tenta automaticamente uma conexão somente por relay.
+- Atrás de NAT restritivo ou de uma VPN (como a 1.1.1.1/WARP da Cloudflare) a conexão direta pode falhar. Com um servidor TURN configurado (`VITE_TURN_*`, de preferência com `turns:` na porta 443), o espectador tenta automaticamente uma conexão somente por relay, que atravessa VPNs. Sem TURN configurado isso não é possível.
 - Sem backend próprio: a sinalização usa o servidor público do PeerJS.
 - A qualidade real depende da velocidade de envio do anfitrião, dividida entre todos que assistem.
 - Fechar a aba do anfitrião fecha a sala para todos.
