@@ -193,38 +193,49 @@ function keepSignalling(peer) {
   peer.on('close', stop)
 }
 
-/** Opens a peer under a room code. Random codes retry when taken; a chosen code rejects with `unavailable-id`. */
-export function openHostPeer(desired, attempts = 5) {
-  return new Promise((resolve, reject) => {
-    const code = desired || randomCode()
-    const peer = new Peer(PREFIX + code, PEER_OPTIONS)
-    peer.once('open', () => {
-      keepSignalling(peer)
-      resolve({ peer, code })
-    })
-    peer.once('error', (err) => {
-      peer.destroy()
-      if (!desired && err.type === 'unavailable-id' && attempts > 1) {
-        openHostPeer(undefined, attempts - 1).then(resolve, reject)
-      } else {
-        reject(err)
-      }
-    })
-  })
-}
+const SIGNALLING_TIMEOUT_MS = 12000
+const SIGNALLING_ATTEMPTS = 3
+// Errors that say "the signalling server could not be reached", as opposed to "that id is taken" or "bad request".
+const RETRYABLE = new Set(['timeout', 'network', 'server-error', 'socket-error', 'socket-closed'])
 
-export function openViewerPeer(relayOnly = false) {
+/**
+ * Registers a new Peer with the signalling server. Behind a VPN (Cloudflare WARP / 1.1.1.1 and others) the first
+ * WebSocket often stalls or drops, and PeerJS then waits forever without an error, so each attempt has a deadline
+ * and a few fresh attempts are made before giving up.
+ */
+function registerPeer(id, options, attempts = SIGNALLING_ATTEMPTS) {
   return new Promise((resolve, reject) => {
-    const peer = new Peer(relayOnly ? RELAY_OPTIONS : PEER_OPTIONS)
+    const peer = id ? new Peer(id, options) : new Peer(options)
+    const fail = (err) => {
+      clearTimeout(timer)
+      peer.destroy()
+      if (attempts > 1 && RETRYABLE.has(err.type)) registerPeer(id, options, attempts - 1).then(resolve, reject)
+      else reject(err)
+    }
+    const timer = setTimeout(() => fail({ type: 'timeout' }), SIGNALLING_TIMEOUT_MS)
     peer.once('open', () => {
+      clearTimeout(timer)
+      peer.off('error', fail)
       keepSignalling(peer)
       resolve(peer)
     })
-    peer.once('error', (err) => {
-      peer.destroy()
-      reject(err)
-    })
+    peer.once('error', fail)
   })
+}
+
+/** Opens a peer under a room code. Random codes retry when taken; a chosen code rejects with `unavailable-id`. */
+export async function openHostPeer(desired, attempts = 5) {
+  const code = desired || randomCode()
+  try {
+    return { peer: await registerPeer(PREFIX + code, PEER_OPTIONS), code }
+  } catch (err) {
+    if (!desired && err.type === 'unavailable-id' && attempts > 1) return openHostPeer(undefined, attempts - 1)
+    throw err
+  }
+}
+
+export function openViewerPeer(relayOnly = false) {
+  return registerPeer(undefined, relayOnly ? RELAY_OPTIONS : PEER_OPTIONS)
 }
 
 export const hostId = (code) => PREFIX + code

@@ -289,6 +289,7 @@ export function useViewer() {
       let peer = peerRef.current
       if (!peer || peer.destroyed || peer.disconnected) {
         peer?.destroy()
+        relayOnly ||= relayRef.current // once a relay was needed, a rejoin keeps using it
         relayRef.current = relayOnly
         try {
           peer = await openViewerPeer(relayOnly)
