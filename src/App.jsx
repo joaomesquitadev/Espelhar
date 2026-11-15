@@ -18,7 +18,7 @@ export default function App() {
   const host = useHost()
   const viewer = useViewer()
   const [name, setName] = useState('')
-  const [initialCode] = useState(codeFromUrl)
+  const [initialCode, setInitialCode] = useState(codeFromUrl)
   const [initialName] = useState(loadName)
   const [roomConflict, setRoomConflict] = useState('')
   const idle = host.status === 'idle' && viewer.status === 'idle'
@@ -48,6 +48,12 @@ export default function App() {
     if (!(await enter())) return
     saveName(hostName)
     host.start(password, hostName, options)
+  }
+
+  // "Não é essa sala?": forget the invited room so neither the form nor a later remount brings it back.
+  function dismissInvite() {
+    setInitialCode('')
+    history.replaceState(null, '', location.pathname)
   }
 
   function goHome() {
@@ -119,6 +125,7 @@ export default function App() {
         audioFailed={host.audioFailed}
         onStart={start}
         onJoin={join}
+        onDismissInvite={dismissInvite}
       />
     )
   }

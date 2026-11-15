@@ -13,7 +13,7 @@ const STEPS = [
   ['Pronto', 'A pessoa vê a sua tela ao vivo, direto do seu navegador.'],
 ]
 
-export default function Home({ initialCode, initialName, starting, error, audioFailed, onStart, onJoin }) {
+export default function Home({ initialCode, initialName, starting, error, audioFailed, onStart, onJoin, onDismissInvite }) {
   const [tab, setTab] = useState(initialCode ? 'watch' : 'share')
   const [name, setName] = useState(initialName)
   const [code, setCode] = useState(initialCode)
@@ -92,7 +92,11 @@ export default function Home({ initialCode, initialName, starting, error, audioF
             Entrar na sala
             <Icon name="arrow" />
           </button>
-          <button className="link-btn" type="button" onClick={() => setInvited(false)}>
+          <button className="link-btn" type="button" onClick={() => {
+              setCode('')
+              setInvited(false)
+              onDismissInvite()
+            }}>
             Não é essa sala? Usar outro código
           </button>
         </form>
