@@ -46,7 +46,7 @@ O app não define atalhos de teclado próprios.
 
 ## Limitações
 
-- Atrás de NAT restritivo ou de uma VPN (como a 1.1.1.1/WARP da Cloudflare) a conexão direta pode falhar. Com um servidor TURN configurado (`VITE_TURN_*`, de preferência com `turns:` na porta 443), o espectador tenta automaticamente uma conexão somente por relay, que atravessa VPNs. Sem TURN configurado isso não é possível. As variáveis `VITE_TURN_*` são lidas na hora do build: no Netlify, cadastre-as em *Site configuration → Environment variables* e faça um novo deploy (o `.env` local não vai para o site publicado).
+- Atrás de NAT restritivo ou de uma VPN (como a 1.1.1.1/WARP da Cloudflare) a conexão direta pode falhar, pois não há servidor de relay. Desligar a VPN ou trocar de rede costuma resolver.
 - Sem backend próprio: a sinalização usa o servidor público do PeerJS.
 - A qualidade real depende da velocidade de envio do anfitrião, dividida entre todos que assistem.
 - Fechar a aba do anfitrião fecha a sala para todos.
@@ -67,9 +67,6 @@ Veja [`.env.example`](.env.example). Nunca commite o arquivo `.env`.
 | --- | --- |
 | `VITE_IPGEOLOCATION_KEY` | Chave da API ipgeolocation.io (consulta de cidade) |
 | `VITE_SITE_URL` | URL pública do site, sem barra final (pré-visualização de links) |
-| `VITE_TURN_URLS` | URL(s) do servidor TURN, separadas por vírgula |
-| `VITE_TURN_USER` | Usuário do TURN |
-| `VITE_TURN_PASS` | Senha do TURN |
 
 ## Estrutura
 
