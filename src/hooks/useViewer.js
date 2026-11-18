@@ -3,8 +3,7 @@ import { DEFAULT_QUALITY, captureScreen, raiseStartBitrate, tuneCall } from '../
 import { every } from '../lib/ticker.js'
 import { cleanName, cleanPlace, cleanText, getPlace, hostId, knownPlace, openViewerPeer, safeCode } from '../lib/room.js'
 
-const CONNECT_TIMEOUT_MS = 30000 // relayed (TURN) connections take longer to set up
-const DIRECT_TIMEOUT_MS = 15000 // then the relay-only attempt takes over
+const CONNECT_TIMEOUT_MS = 20000
 const NOT_FOUND_RETRIES = 2 // a host that just lost its signalling link is back within a few seconds
 const NOT_FOUND_DELAY_MS = 3500
 const IN_ROOM = ['connecting', 'watching', 'waiting']
@@ -43,7 +42,6 @@ export function useViewer() {
   const lastHeard = useRef(0)
   const creds = useRef({ name: '', password: '' })
   const heard = useRef(false) // the host has answered something on the current attempt
-  const relayRef = useRef(false) // the current peer sends everything through the relay
   const roomRef = useRef('')
   const joinRef = useRef(null)
   const statusRef = useRef('idle')
@@ -247,52 +245,39 @@ export function useViewer() {
         if (connRef.current === conn) lose()
       })
 
-      // Before the host has answered anything, a failed attempt is retried once with every byte relayed
-      // through the TURN server, which gets through VPNs and strict networks that block a direct path.
+      // Before the host has answered anything, a failed attempt ends the join with an error.
       const giveUp = (message) => {
         if (connRef.current !== conn || heard.current) return
-        if (!relayRef.current) {
-          relayRef.current = true
-          clearTimeout(timerRef.current)
-          const old = peerRef.current
-          peerRef.current = null
-          connRef.current = null
-          old?.destroy()
-          joinRef.current(roomCode, creds.current.name, creds.current.password, true)
-          return
-        }
         fail(message)
       }
       const TIMEOUT_MESSAGE =
         'A conexão demorou demais. Sua rede, a do anfitrião ou uma VPN bloqueia a conexão. Tente desligar a VPN, usar outro Wi-Fi ou dados móveis.'
       conn.on('error', () => giveUp(TIMEOUT_MESSAGE))
       conn.on('close', () => giveUp(TIMEOUT_MESSAGE))
-      // A VPN that drops direct UDP makes ICE fail well before the timeout: move on to the relay at once.
+      // A network that drops direct UDP makes ICE fail well before the timeout: report it at once.
       const pc = conn.peerConnection
       pc?.addEventListener('iceconnectionstatechange', () => {
         if (pc.iceConnectionState === 'failed') giveUp(TIMEOUT_MESSAGE)
       })
 
       clearTimeout(timerRef.current)
-      timerRef.current = setTimeout(() => giveUp(TIMEOUT_MESSAGE), relayRef.current ? CONNECT_TIMEOUT_MS : DIRECT_TIMEOUT_MS)
+      timerRef.current = setTimeout(() => giveUp(TIMEOUT_MESSAGE), CONNECT_TIMEOUT_MS)
     },
     [fail, lose, stopShare, teardown],
   )
 
   const join = useCallback(
-    async (roomCode, name, password = '', relayOnly = false) => {
+    async (roomCode, name, password = '') => {
       creds.current = { name, password }
-      if (!relayOnly) notFound.current = 0
+      notFound.current = 0
       setError('')
       setStatus('connecting')
 
       let peer = peerRef.current
       if (!peer || peer.destroyed || peer.disconnected) {
         peer?.destroy()
-        relayOnly ||= relayRef.current // once a relay was needed, a rejoin keeps using it
-        relayRef.current = relayOnly
         try {
-          peer = await openViewerPeer(relayOnly)
+          peer = await openViewerPeer()
         } catch {
           fail('Não foi possível conectar ao serviço de salas. Verifique sua internet e tente de novo.')
           return

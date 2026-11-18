@@ -5,7 +5,7 @@ node_modules/
 dist/
 dist-ssr/
 
-# Variáveis de ambiente (contêm chaves e credenciais TURN)
+# Variáveis de ambiente (contêm chaves)
 .env
 .env.*
 !.env.example
