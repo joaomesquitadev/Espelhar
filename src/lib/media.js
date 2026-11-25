@@ -21,11 +21,109 @@ export const IS_MOBILE =
 export const CAN_SHARE = !IS_MOBILE && Boolean(navigator.mediaDevices?.getDisplayMedia)
 
 /**
+ * Where the broadcast's sound comes from:
+ * - 'screen': the tab, system or window audio the share picker offers (mixes every app on the system);
+ * - 'none': no sound;
+ * - 'device:<deviceId>': one audio input, such as a virtual cable (VB-Cable "CABLE Output") that only
+ *   the chosen apps play into, which is how a game is sent without the Discord call.
+ */
+export const AUDIO_SCREEN = 'screen'
+export const AUDIO_NONE = 'none'
+const DEVICE_PREFIX = 'device:'
+const AUDIO_SOURCE_KEY = 'espelhar.audioSource'
+
+export function deviceSource(deviceId) {
+  return DEVICE_PREFIX + deviceId
+}
+
+/** The input device id of a 'device:' source, or '' for the others. */
+export function sourceDevice(source) {
+  return typeof source === 'string' && source.startsWith(DEVICE_PREFIX) ? source.slice(DEVICE_PREFIX.length) : ''
+}
+
+/** Accepts the old boolean `audio` flag as well as a source string. */
+function normalizeSource(source) {
+  if (source === true || source == null) return AUDIO_SCREEN
+  if (source === false) return AUDIO_NONE
+  return source === AUDIO_NONE || sourceDevice(source) ? source : AUDIO_SCREEN
+}
+
+export function loadAudioSource() {
+  try {
+    return normalizeSource(localStorage.getItem(AUDIO_SOURCE_KEY))
+  } catch {
+    return AUDIO_SCREEN
+  }
+}
+
+export function saveAudioSource(source) {
+  try {
+    localStorage.setItem(AUDIO_SOURCE_KEY, normalizeSource(source))
+  } catch {
+    // storage unavailable: the choice just is not remembered
+  }
+}
+
+/**
+ * Audio inputs the browser can open. Until the page has been allowed to use a microphone once (see
+ * `unlockAudioLabels`) browsers hide the inputs' ids and names, and `locked` is true. The "default" and
+ * "communications" aliases are left out because they only repeat a real device under another name.
+ */
+export async function listAudioInputs() {
+  if (!navigator.mediaDevices?.enumerateDevices) return { devices: [], locked: false }
+  const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput')
+  const devices = inputs
+    .filter((d) => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications')
+    .map((d, i) => ({ id: d.deviceId, label: d.label || `Entrada de áudio ${i + 1}` }))
+  return { devices, locked: inputs.some((d) => !d.deviceId || !d.label) }
+}
+
+/** Asks for microphone permission once, only so device names show up, and releases it right away. */
+export async function unlockAudioLabels() {
+  const probe = await navigator.mediaDevices.getUserMedia({ audio: true })
+  probe.getTracks().forEach((track) => track.stop())
+}
+
+/** Opens one audio input untouched: no echo cancellation, noise suppression or gain control squashing a game. */
+export async function captureAudioDevice(deviceId) {
+  const media = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      deviceId: { exact: deviceId },
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: { ideal: 2 },
+    },
+  })
+  return media.getAudioTracks()[0]
+}
+
+/**
+ * Captures the screen plus the sound of `audioSource` (see AUDIO_SCREEN). One prompt for the screen;
+ * a 'device:' source then opens that input separately and adds its track to the same stream.
+ */
+export async function captureScreen(quality = DEFAULT_QUALITY, audioSource = AUDIO_SCREEN) {
+  const source = normalizeSource(audioSource)
+  const deviceId = sourceDevice(source)
+  const media = await captureDisplay(quality, source === AUDIO_SCREEN)
+  if (deviceId) {
+    try {
+      media.addTrack(await captureAudioDevice(deviceId))
+    } catch (err) {
+      media.getTracks().forEach((track) => track.stop())
+      err.audioDevice = true
+      throw err
+    }
+  }
+  return media
+}
+
+/**
  * Captures the screen with audio from a tab, the whole system or a window, depending on what the browser offers. One prompt, no retries.
  * The request stays minimal because browsers differ in which constraints they accept at capture time;
  * the frame rate is applied to the live track afterwards.
  */
-export async function captureScreen(quality = DEFAULT_QUALITY, audio = true) {
+async function captureDisplay(quality, audio) {
   const q = QUALITIES[quality] ?? QUALITIES[DEFAULT_QUALITY]
   // systemAudio "include" offers the "share system audio" option when a whole screen is picked, and
   // windowAudio "window" asks for the shared window's own sound where the browser supports it; browsers
@@ -34,12 +132,14 @@ export async function captureScreen(quality = DEFAULT_QUALITY, audio = true) {
   // The size and frame rate ceilings matter on multi-monitor setups: without them the browser grabs the
   // monitor at native size (often 4K or two screens wide) and the encoder chokes on it.
   // selfBrowserSurface "exclude" removes this very tab from the picker, avoiding the hall-of-mirrors loop.
-  const base = {
-    audio: audio ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
-    systemAudio: 'include',
-    windowAudio: 'window',
-    selfBrowserSurface: 'exclude',
-  }
+  const base = audio
+    ? {
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        systemAudio: 'include',
+        windowAudio: 'window',
+        selfBrowserSurface: 'exclude',
+      }
+    : { audio: false, selfBrowserSurface: 'exclude' }
   let media
   try {
     media = await navigator.mediaDevices.getDisplayMedia({

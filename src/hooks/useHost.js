@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DEFAULT_QUALITY, applyQuality, captureScreen, tuneCall } from '../lib/media.js'
+import {
+  AUDIO_NONE,
+  DEFAULT_QUALITY,
+  applyQuality,
+  captureAudioDevice,
+  captureScreen,
+  loadAudioSource,
+  saveAudioSource,
+  sourceDevice,
+  tuneCall,
+} from '../lib/media.js'
 import { every } from '../lib/ticker.js'
 import {
   CODE_LENGTH,
@@ -39,6 +49,24 @@ function sharingInfo(s) {
   return NO_SOURCE
 }
 
+/** The audio sender of an outgoing call, including one whose track was removed. */
+function audioSender(call) {
+  const pc = call?.peerConnection
+  if (!pc?.getTransceivers) return null
+  for (const t of pc.getTransceivers()) {
+    if (t.receiver.track?.kind === 'audio' && !t.stopped && t.direction !== 'inactive' && t.direction !== 'recvonly') return t.sender
+  }
+  return null
+}
+
+function audioDeviceError(err) {
+  if (err.name === 'NotAllowedError')
+    return 'O navegador bloqueou o acesso à entrada de áudio. Libere o microfone para este site no cadeado da barra de endereço.'
+  if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError')
+    return 'A entrada de áudio escolhida não foi encontrada. Ela pode ter sido desconectada; escolha outra fonte de áudio.'
+  return `Não foi possível abrir a entrada de áudio escolhida. (${err.name})`
+}
+
 /**
  * The room outlives any single broadcast: `status` is live while the room exists,
  * and `source` says who (host, a guest with permission, or nobody) is sharing right now.
@@ -58,6 +86,8 @@ export function useHost() {
   const [audioFailed, setAudioFailed] = useState(false)
   const [messages, setMessages] = useState([])
   const [quality, setQualityState] = useState(DEFAULT_QUALITY)
+  const [audioSource, setAudioSourceState] = useState(loadAudioSource)
+  const audioSourceRef = useRef(audioSource)
   const session = useRef(null)
   const actions = useRef({})
 
@@ -395,6 +425,12 @@ export function useHost() {
 
   /** Explains a failed capture; a failure while asking for audio offers a retry without it. */
   const reportCaptureError = useCallback((err, audio) => {
+    if (err.audioDevice) {
+      console.warn('Espelhar: falha ao abrir a entrada de áudio', err)
+      setAudioFailed(true)
+      setError(audioDeviceError(err))
+      return
+    }
     if (err.name === 'NotAllowedError') return
     console.warn('Espelhar: falha na captura', err)
     if (err.name === 'NotReadableError' && audio) {
@@ -415,7 +451,7 @@ export function useHost() {
       let media = null
       if (share) {
         try {
-          media = await captureScreen(initialQuality, audio)
+          media = await captureScreen(initialQuality, audio ? audioSourceRef.current : AUDIO_NONE)
         } catch (err) {
           setStatus('idle')
           reportCaptureError(err, audio)
@@ -486,7 +522,7 @@ export function useHost() {
     setAudioFailed(false)
     let media
     try {
-      media = await captureScreen(session.current?.quality, audio)
+      media = await captureScreen(session.current?.quality, audio ? audioSourceRef.current : AUDIO_NONE)
     } catch (err) {
       reportCaptureError(err, audio)
       return
@@ -546,6 +582,70 @@ export function useHost() {
     for (const call of s.calls.values()) tuneCall(call, next)
   }, [])
 
+  /** Replaces the broadcast's audio track (null removes it) and updates every viewer. */
+  const swapAudio = useCallback(
+    (s, media, track) => {
+      for (const old of media.getAudioTracks()) {
+        old.stop()
+        media.removeTrack(old)
+      }
+      if (track) {
+        media.addTrack(track)
+        track.addEventListener('ended', () => {
+          // The device went away (unplugged or disabled): carry on without sound.
+          if (session.current?.media === media && media.getAudioTracks().includes(track)) swapAudio(s, media, null)
+        })
+      }
+      let recall = false
+      for (const call of s.calls.values()) {
+        const sender = audioSender(call)
+        if (sender) sender.replaceTrack(track).catch(() => {})
+        else if (track) recall = true
+      }
+      // A call opened without sound has no audio channel to fill, so those viewers get a fresh call.
+      publish(recall)
+    },
+    [publish],
+  )
+
+  /**
+   * Picks where the sound comes from. During a broadcast an input device (or silence) is swapped in
+   * live, without a new screen prompt; the screen/system audio can only come from the share picker,
+   * so that choice applies the next time the screen is shared.
+   */
+  const setAudioSource = useCallback(
+    async (next) => {
+      audioSourceRef.current = next
+      setAudioSourceState(next)
+      saveAudioSource(next)
+      setError('')
+      setAudioFailed(false)
+      const s = session.current
+      const media = s?.media
+      if (!media) return
+      const deviceId = sourceDevice(next)
+      if (!deviceId && next !== AUDIO_NONE) return
+
+      let track = null
+      if (deviceId) {
+        try {
+          track = await captureAudioDevice(deviceId)
+        } catch (err) {
+          console.warn('Espelhar: falha ao abrir a entrada de áudio', err)
+          setError(audioDeviceError(err))
+          return
+        }
+        // The choice changed again, or the broadcast ended, while the device was opening.
+        if (audioSourceRef.current !== next || session.current?.media !== media) {
+          track.stop()
+          return
+        }
+      }
+      swapAudio(s, media, track)
+    },
+    [swapAudio],
+  )
+
   actions.current.changeCode = changeCode
 
   useEffect(() => () => stop(), [stop])
@@ -571,6 +671,8 @@ export function useHost() {
     placeError,
     quality,
     setQuality,
+    audioSource,
+    setAudioSource,
     start,
     stop: () => stop(),
     messages,
