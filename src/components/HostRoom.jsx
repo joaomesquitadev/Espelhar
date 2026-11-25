@@ -1,4 +1,3 @@
-import AudioSource from './AudioSource.jsx'
 import CopyButton from './CopyButton.jsx'
 import Chat from './Chat.jsx'
 import ChangeCode from './ChangeCode.jsx'
@@ -7,7 +6,7 @@ import Participants from './Participants.jsx'
 import Stage from './Stage.jsx'
 import { useState } from 'react'
 import { useJoinSound } from '../hooks/useJoinSound.js'
-import { AUDIO_SCREEN, CAN_SHARE, QUALITIES, captureSurface } from '../lib/media.js'
+import { CAN_SHARE, QUALITIES, captureSurface } from '../lib/media.js'
 import { placeProblemText, roomLink } from '../lib/room.js'
 
 export default function HostRoom({
@@ -18,8 +17,6 @@ export default function HostRoom({
   placeError,
   quality,
   onSetQuality,
-  audioSource,
-  onSetAudioSource,
   participants,
   stream,
   source,
@@ -132,16 +129,7 @@ export default function HostRoom({
               {QUALITIES[quality].detail}. A internet de envio se divide entre todos que assistem.
             </span>
           </div>
-          {CAN_SHARE && (
-            <AudioSource
-              value={audioSource}
-              onChange={onSetAudioSource}
-              sharing={hostSharing}
-              stream={hostSharing ? stream : null}
-              onShareAgain={onShareAgain}
-            />
-          )}
-          {hostSharing && !source.audio && audioSource === AUDIO_SCREEN && (
+          {hostSharing && !source.audio && (
             <p className="side-note">
               Sem áudio nesta transmissão. Ao escolher o que espelhar, deixe ligada a opção "Compartilhar áudio
               do sistema" (tela inteira) ou "Compartilhar áudio da aba" (aba do navegador). No Chrome ou Edge
