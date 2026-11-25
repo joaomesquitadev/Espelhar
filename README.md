@@ -17,6 +17,7 @@ Alternativa para aplicativos que não têm espelhamento de tela (ou que removera
 - Até 30 espectadores na mesma sala
 - Qualidade da transmissão: 1080p a 30 fps ou 1080p a 60 fps
 - Áudio da transmissão (da aba, do sistema ou da janela, conforme o que o navegador oferece), com botão de silenciar e controle de volume para quem assiste; é possível espelhar sem áudio
+- Fonte de áudio escolhida pelo anfitrião: áudio da tela/sistema, sem áudio ou uma entrada de áudio específica, trocada ao vivo sem parar a transmissão. Serve para mandar só o som de um jogo, sem a chamada do Discord (veja [Transmitir só o áudio de um app](#transmitir-só-o-áudio-de-um-app))
 - Chat de texto na sala, pelo canal de dados P2P
 - Lista de participantes com a cidade de cada pessoa (consulta por IP via ipgeolocation.io)
 - Permissões: o anfitrião pode dar a qualquer participante a permissão de espelhar a própria tela ou torná-lo admin, que também remove pessoas, para a tela de outra pessoa e troca o código; só o anfitrião encerra a sala
@@ -37,12 +38,24 @@ Alternativa para aplicativos que não têm espelhamento de tela (ou que removera
 | Sala (anfitrião) | **Copiar link** / **Copiar código** | Copia o convite |
 | Sala (anfitrião e admins) | **Trocar código** | Aplica um novo código ou gera um **Aleatório** |
 | Sala (anfitrião) | **Qualidade** | Alterna entre 1080p·30 fps e 1080p·60 fps |
+| Sala (anfitrião) | **Fonte de áudio** | Escolhe o som da transmissão; a escolha fica salva no navegador |
 | Sala (anfitrião) | **Mostrar prévia mesmo assim** | Liga a prévia ao espelhar uma tela inteira (desligada por padrão para evitar o efeito espelho) |
 | Sala (quem assiste) | **Ativar som** / **Silenciar** e controle de volume | Ajusta o áudio da transmissão |
 | Sala (quem assiste) | **Sair** | Sai da sala |
 | Participantes | Botões por pessoa | Permitir que espelhe, tornar admin, remover da sala |
 
 O app não define atalhos de teclado próprios.
+
+### Transmitir só o áudio de um app
+
+O navegador só captura o som do sistema inteiro: jogo, Discord e o resto juntos. Para mandar um app só, use um cabo de áudio virtual (Windows):
+
+1. Instale o [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) (gratuito).
+2. Em **Configurações › Sistema › Som › Mixer de volume**, defina a saída do jogo como **CABLE Input**.
+3. Para continuar ouvindo o jogo: **Painel de som › Gravação › CABLE Output › Propriedades › Escutar** › marque **Escutar este dispositivo** e escolha seu fone.
+4. Na sala, em **Fonte de áudio**, escolha **CABLE Output**. Se os nomes não aparecerem, clique em **Mostrar os nomes das entradas** e permita o microfone.
+
+O áudio da tela/sistema só pode ser escolhido na janela de compartilhamento do navegador; trocar para ele durante a transmissão pede para espelhar de novo.
 
 ## Limitações
 
