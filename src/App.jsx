@@ -72,8 +72,6 @@ export default function App() {
         placeError={host.placeError}
         quality={host.quality}
         onSetQuality={host.setQuality}
-        audioSource={host.audioSource}
-        onSetAudioSource={host.setAudioSource}
         participants={host.participants}
         stream={host.stream}
         source={host.source}
